@@ -48,9 +48,6 @@ dir <- "/Volumes/fsmresfiles/PrevMed/Projects/Brain_SPORE_BB_Core/Projects/Horbi
 readfile <- file.path(dir,"predict_VTE_app/analysisData_RShiny_2020-07-15.csv")  # data from training population that selected predictors
 rawdat <- read_csv(readfile) 
 
-readimput <- file.path(dir, "predict_VTE_app/fudat_ImputedData_2020-07-15.csv")   #imputed data
-imputdat <- read_csv(readimput)
-
 readcoef <- file.path(dir, "predict_VTE_app/LASSOcoef_2020-07-15.csv")  # coefficients from training data
 coefdat <- read_csv(readcoef)
   
@@ -246,11 +243,13 @@ ui <- dashboardPagePlus(skin = "purple",
               fluidRow(
                 box(title = "Controls",
                     width = 4,
-                    collapsible = TRUE, status = "primary", solidHeader = TRUE,
-                  "Select the variable you would like to see plotted in the bar graph to the right.",   br(), br(),  "",
-                  selectInput(inputId = "catvarplot", label = "Comparison Variable",
-                              choices = c(Choose = '',catvars),
-                              multiple = FALSE)  ),
+                    collapsible = TRUE, status = "warning", solidHeader = TRUE,
+                    "Select the variable you would like to see plotted in the bar graph to the right.",   br(), br(),  "",
+
+                    selectInput(inputId = "contvarplot", label = "Comparison Variable ",
+                                choices = c(Choose = '',contvars),
+                                multiple = FALSE)),
+                
                 
                 box(title = "Explore Training Cohort by WHO Grade",  
                     width=7,
@@ -266,10 +265,8 @@ ui <- dashboardPagePlus(skin = "purple",
                     width = 4,
                     collapsible = TRUE, status = "warning", solidHeader = TRUE,
                     "Select the variable you would like to see plotted in the bar graph to the right.",   br(), br(),  "",
-                    selectInput(inputId = "catvarplot", label = "Comparison Variable (X axis)",
-                                choices = c(Choose = '',catvars),
-                                multiple = FALSE),
-                    selectInput(inputId = "contvarplot", label = "Comparison Variable (Y axis)",
+
+                    selectInput(inputId = "contvarplot2", label = "Comparison Variable",
                                 choices = c(Choose = '',contvars),
                                 multiple = FALSE)),
                 
@@ -317,30 +314,38 @@ ui <- dashboardPagePlus(skin = "purple",
 #================           SERVER               ==========#
 #==========================================================#
 server <- function(input, output) {
-  
 
-    
-
-  set.seed(122)
-  histdata <- rnorm(500)
   
-  output$plot1 <- renderPlot({
-    data <- histdata[seq_len(input$slider)]
-    hist(data)
-  })
   
   output$plotbar_byGrade <- renderPlotly({
-  ggplot(data = clindat, aes(x = IDH, y = Age, fill=VTE)) +
+    
+    validate(
+      need(input$contvarplot != '', 'Please choose a comparison variable.')
+    )
+    
+  datanew <- clindat %>%
+    dplyr::select(one_of(c("VTE",  "WHOgrade_char", "IDH", input$contvarplot))) %>%
+    gather(Attribute, value, -VTE, -WHOgrade_char, -IDH)
+    
+  ggplot(data = datanew, aes(x = IDH, y = value, fill=VTE)) +
       geom_bar(stat = "identity",  position=position_dodge()) + 
-      facet_wrap( ~ WHOgrade_char) 
+      facet_wrap( ~ WHOgrade_char) + ylab(unique(datanew$Attribute))
   })
   
   
   output$plotbar <- renderPlotly({
-    ggplot(data = clindat, aes(x = IDH, y = BMI, fill=VTE)) +
-      geom_bar(stat = "identity",  position=position_dodge())
+    
+    validate(
+      need(input$contvarplot2 != '', 'Please choose a comparison variable.')
+    )
+    
+    datanew2 <- clindat %>%
+      dplyr::select(one_of(c("VTE",  "IDH", input$contvarplot2))) %>%
+      gather(Attribute, value, -VTE, -IDH)
+    
+    ggplot(data = datanew2, aes(x = IDH, y = value, fill=VTE)) +
+      geom_bar(stat = "identity",  position=position_dodge()) + ylab(unique(datanew2$Attribute))
   })
-  
   
   
   output$plot3D <- renderPlotly({
