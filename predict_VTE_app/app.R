@@ -12,6 +12,11 @@
 #===     Author: Kirsten Bell Burdett                   ===#
 #===     Created: 02 July, 2020                         ===#
 #===     R Shiny App for VTE prediction in glioma patients #
+
+
+# Purpose: This interactive web application utilizes patient and tumor characteristics 
+#to predict venous thromboembolism (VTE) in glioma patients after surgical resection of original glioma.
+
 #==========================================================#
 
 # https://shiny.rstudio.com/gallery/
@@ -20,37 +25,83 @@
 
 #Installing/Loading Packages
 
-if(!require(shiny)){
-  install.packages("shiny")
-  library(shiny)
-}
+# if(!require(shiny)){
+#   install.packages("shiny")
+#   library(shiny)
+# }
 
-if(!require(shinydashboard)){
-  install.packages("shinydashboard")
-  library(shinydashboard)
-}
-
-
-if(!require(shinydashboardPlus)){
-  install.packages("shinydashboardPlus")
-  library(shinydashboardPlus)
-}
+library(shiny)
+library(shinydashboard)
+library(shinydashboardPlus)
+library(tidyverse)
+library(plotly)
 
 
-# 
-# dbHeader <- dashboardHeader(title = "VTE Prediction",
-#                             tags$li(a(img(src = 'FeinbergLogo.png',
-#                                           title = "Company Home", height = "30px"),
-#                                       style = "padding-top:10px; padding-bottom:10px;"),
-#                                     class = "dropdown"))
 
 
+#==========================================================#
+#===============        Read in data             ==========#
+#==========================================================#
+
+dir <- "/Volumes/fsmresfiles/PrevMed/Projects/Brain_SPORE_BB_Core/Projects/Horbinski/Thrombosis/Code/VTEpredictionGlioma/"
+
+readfile <- file.path(dir,"predict_VTE_app/analysisData_RShiny_2020-07-15.csv")  # data from training population that selected predictors
+rawdat <- read_csv(readfile) 
+
+readimput <- file.path(dir, "predict_VTE_app/fudat_ImputedData_2020-07-15.csv")   #imputed data
+imputdat <- read_csv(readimput)
+
+readcoef <- file.path(dir, "predict_VTE_app/LASSOcoef_2020-07-15.csv")  # coefficients from training data
+coefdat <- read_csv(readcoef)
+  
+
+#=========     clean data     ========#
+clindat <- rawdat %>% 
+  dplyr::mutate(VTE = recode(iVTE, !!!c("1" = "Yes VTE", "0"= "No VTE")),
+                Sex_num = recode(Sex , !!!c("Male" = 1,  "Female" = 0)),
+                Hypertension_num = recode(Hypertension, !!!c("Yes" = 1,  "No" = 0)),
+                Hypothyroidism_num = recode(Hypothyroidism, !!!c("Yes" = 1,  "No" = 0)),
+                IDH_num = recode(IDH, !!!c("Yes" = 1,  "No" = 0)),
+                MGMT_num = recode(MGMT, !!!c("Yes" = 1, "No" = 0)),
+                TMZ_num = recode(TMZ, !!!c("Yes" = 1,  "No" = 0)),
+                Current_Smoker_num = recode(Current_Smoker, !!!c("Yes" = 1,  "No" = 0)),
+                WHOgrade_char = recode(WHOgrade, !!!c("2" = "Grade 2", "3" = "Grade 3", "4" = "Grade 4")))
+
+catvars <- c("Sex", "Hypertension", "Hypothyroidism", "IDH", "MGMT", "TMZ", "Current_Smoker")
+contvars <- c("Age", "BMI", "WBCcount")
+
+
+#======    PCA    =======#
+library(missMDA)
+predictorvars <- c("Age", "BMI", "Sex_num", "WBCcount", "Hypertension_num", "Hypothyroidism_num", "IDH_num",
+                   "MGMT_num", "TMZ_num", "WHOgrade", "Current_Smoker_num")
+
+imputePCAout <- imputePCA(as.data.frame(clindat[,predictorvars]), method = "EM", ncp=1)
+
+pca <- prcomp(imputePCAout$completeObs, center = TRUE, scale. = TRUE)
+pcpoints <- data.frame(clindat$VTE, pca$x)
+pcout <- summary(pca)$importance
+
+
+
+
+
+
+
+
+
+
+
+
+#==========================================================#
+#================            UI                  ==========#
+#==========================================================#
 ui <- dashboardPagePlus(skin = "purple",
   dashboardHeader(title = "VTE Prediction"),
   dashboardSidebar(sidebarMenu(
     menuItem("Home", tabName = "home", icon = icon("home")),
     menuItem("Prediction", tabName = "prediction"),
-    menuItem("Visualize", tabName = "test"),
+    menuItem("Visualize", tabName = "visualize"),
     menuItem("References", tabName = "references")
   )),
   ## Body content
@@ -110,6 +161,17 @@ ui <- dashboardPagePlus(skin = "purple",
               
               #======  Help  ======#
               titlePanel("Help"),
+              tags$li(tags$ul("Prediction vs. Inference: Prediction main goal is to estimate a function, 
+                            while inference is interested in how covariates impact the outcome. Prediction is not
+                              looking to understand causal relationships as the primary goal.")),
+              tags$li(tags$ul("In order to answer our prediction problem, we fit several models on the training data and 
+                            selected the model which minimized the loss on our test data. This resulted in the optimal function
+                            selecting the covariates to predict future VTE events. Here we are assuming
+                            that our selected model will perform well and be generalizable to unseen data.")),
+              tags$li(tags$ul(tags$a(href= "https://www.stat.berkeley.edu/~aldous/157/Papers/shmueli.pdf",
+                                     "https://www.stat.berkeley.edu/~aldous/157/Papers/shmueli.pdf"))),
+              tags$li(tags$ul(tags$a(href="https://www.datascienceblog.net/post/commentary/inference-vs-prediction/",
+                                     "https://www.datascienceblog.net/post/commentary/inference-vs-prediction/"))),
               p("Resources for help. Potentially add a link regarding prediction vs. inference.")
               
       ),
@@ -122,63 +184,120 @@ ui <- dashboardPagePlus(skin = "purple",
               p("Patient and tumor characteristics at diagnosis of original glioma"),
               br(),
               
-              numericInput(inputId = "Age", label = strong("Age (Years)"), min=0, max=100, value=0),
-              
-              sliderInput('BMI', 'BMI', 0,50,1),
-              
-              selectInput(inputId = "Sex", label = strong("Sex"),
-                          choices = c("Male" , "Female"),
-                          multiple = FALSE),
-              
-              
-              radioButtons(inputId = "Current_Smoker", label = "Current Smoker", c("No", "Yes")),
-              
-              numericInput(inputId = "Platelet_count", label = strong("Platelet count (10^9/L)"), value = 0),
-              numericInput(inputId = "WBCcount", label = strong("White blood cell count (10^9/L)"), value = 0),
-              
-              
-              
-              radioButtons(inputId = "IDH", label = "IDH Mutation", c("No", "Yes")),
-              radioButtons(inputId = "MGMT", label = "MGMT methylation", c("No", "Yes")),
-              radioButtons(inputId = "TMZ", label = "Treated with TMZ", c("No", "Yes")),
-              radioButtons(inputId = "WHOgrade", label = "WHO grade", c("No", "Yes")),
               
               fluidRow(
-                radioButtons(inputId = "Hypertension", label = "Hypertension", c("No", "Yes")),
+                box(title = "Clinical Characteristics", status= "primary", solidHeader = TRUE,
+                    collapsible = TRUE, height = 700,
+                    
+                    "At diagnosis of original glioma",  br(), br(),  "",
+                    
+                    numericInput(inputId = "Age", label = "Age (Years)", min=0, max=100, value=NULL),
+                    
+                    selectInput(inputId = "Sex", label = "Sex",
+                                choices = c(Choose = '',c("Male" , "Female")),
+                                multiple = FALSE),
+                    
+                    radioButtons(inputId = "Current_Smoker", label = "Current Smoker", c("Yes", "No"), selected = character(0)),
+                    
+                    sliderInput('BMI', 'BMI', 0,50,1),
+                    
+                    numericInput(inputId = "Platelet_count", label = "Platelet count (10^9/L)", value = NULL),
+                    numericInput(inputId = "WBCcount", label = "White blood cell count (10^9/L)", value = NULL),
+                    radioButtons(inputId = "TMZ", label = "Treated with TMZ", c("Yes", "No"), selected = character(0))
+                    
+                ),
                 
-                radioButtons(inputId = "Hypothyroidism", label = "Hypothyroidism", c("No", "Yes"))
+                box(title = "Molecular Markers", status = "primary", solidHeader = TRUE,
+                    collapsible = TRUE, height = 350,
+                    radioButtons(inputId = "IDH", label = "IDH Mutation", c("Yes", "No"), selected = character(0)),
+                    radioButtons(inputId = "MGMT", label = "MGMT methylation", c("Yes", "No"), selected = character(0)),
+                    radioButtons(inputId = "WHOgrade", label = "WHO grade of original glioma", c(2,3,4), selected = character(0))
+                    ),
+                
+                box(title = "History of the following?", status = "primary", solidHeader = TRUE,
+                    collapsible = TRUE, height = 330,
+                    
+                    "At diagnosis of original glioma", br(), "",
+                    
+                    br(),
+                    
+                    radioButtons(inputId = "Hypertension", label = "Hypertension", c("Yes", "No"), selected = character(0)),
+                    radioButtons(inputId = "Hypothyroidism", label = "Hypothyroidism", c("Yes", "No"), selected = character(0))
+                    
+                    )
               ),
               
-              
-              
-              
+
               br(),
               br(),
               
-              p("Prediction probabilities for patient input."),
               
-              br(),
-              p("results here")
+              titlePanel("Prediction Probabilities"),
+              tags$li(tags$ul("1, 3, 6, 12 months")),
+              tags$li(tags$ul("Predicted probabilities from Cox regression."))
+           
       ),
       
           
       
-      # test tab content
-      tabItem(tabName = "test",
-
+      # visualize tab content
+      tabItem(tabName = "visualize",
+              
               fluidRow(
-                box(plotOutput("plot1", height = 250)),
+                box(title = "Controls",
+                    width = 4,
+                    collapsible = TRUE, status = "primary", solidHeader = TRUE,
+                  "Select the variable you would like to see plotted in the bar graph to the right.",   br(), br(),  "",
+                  selectInput(inputId = "catvarplot", label = "Comparison Variable",
+                              choices = c(Choose = '',catvars),
+                              multiple = FALSE)  ),
                 
-                box(
-                  title = "Controls",
-                  sliderInput("slider", "Number of observations:", 1, 100, 50)
+                box(title = "Explore Training Cohort by WHO Grade",  
+                    width=7,
+                    collapsible = TRUE, status = "primary", solidHeader = TRUE,
+                    plotlyOutput("plotbar_byGrade")
                 )
+              ),
+              
+              
+              
+              fluidRow(
+                box(title = "Controls",
+                    width = 4,
+                    collapsible = TRUE, status = "warning", solidHeader = TRUE,
+                    "Select the variable you would like to see plotted in the bar graph to the right.",   br(), br(),  "",
+                    selectInput(inputId = "catvarplot", label = "Comparison Variable (X axis)",
+                                choices = c(Choose = '',catvars),
+                                multiple = FALSE),
+                    selectInput(inputId = "contvarplot", label = "Comparison Variable (Y axis)",
+                                choices = c(Choose = '',contvars),
+                                multiple = FALSE)),
+                
+                box(title = "Explore Training Cohort", 
+                    width=7,
+                    collapsible = TRUE, status = "warning", solidHeader = TRUE,
+                    plotlyOutput("plotbar", height = 300))
+              ),
+              
+              
+              
+              fluidRow(
+                box(title = "PCA", 
+                    width = 11,
+                    collapsible = TRUE, solidHeader = TRUE, status = "success",
+                    "PCA low-dimensional representation that explain variance",
+                    plotlyOutput("plot3D"))
               )
+
+              
+      
       ),
       
       # references tab content
       tabItem(tabName = "references",
-              h2("references"))
+              h2("List references HERE")
+    
+      )
     )
   ),
   
@@ -188,7 +307,20 @@ ui <- dashboardPagePlus(skin = "purple",
  dashboardFooter(left_text = "VTE Prediction" ,right_text = tags$img(src='FeinbergLogo.png',height='35',width='150'))
 )
 
+
+
+
+
+
+
+#==========================================================#
+#================           SERVER               ==========#
+#==========================================================#
 server <- function(input, output) {
+  
+
+    
+
   set.seed(122)
   histdata <- rnorm(500)
   
@@ -196,6 +328,34 @@ server <- function(input, output) {
     data <- histdata[seq_len(input$slider)]
     hist(data)
   })
+  
+  output$plotbar_byGrade <- renderPlotly({
+  ggplot(data = clindat, aes(x = IDH, y = Age, fill=VTE)) +
+      geom_bar(stat = "identity",  position=position_dodge()) + 
+      facet_wrap( ~ WHOgrade_char) 
+  })
+  
+  
+  output$plotbar <- renderPlotly({
+    ggplot(data = clindat, aes(x = IDH, y = BMI, fill=VTE)) +
+      geom_bar(stat = "identity",  position=position_dodge())
+  })
+  
+  
+  
+  output$plot3D <- renderPlotly({
+    plot_ly(pcpoints, x=~PC1, y=~PC2, z=~PC3,
+            color = ~clindat.VTE) %>%
+      add_markers() %>%
+      layout(scene = list(xaxis = list(title = paste0("PC1 (", round(pcout["Proportion of Variance", "PC1"] *100,1) , "%)")),
+                          yaxis = list(title = paste0("PC2 (", round(pcout["Proportion of Variance", "PC2"] *100,1) , "%)")),
+                          zaxis = list(title = paste0("PC3 (", round(pcout["Proportion of Variance", "PC3"] *100,1) , "%)"))))
+    
+    #layout(legend=list(title=list(text='<b> VTE </b>')))
+  })
+  
+
+  
 }
 
 shinyApp(ui, server)
