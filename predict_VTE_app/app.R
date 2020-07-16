@@ -158,18 +158,13 @@ ui <- dashboardPagePlus(skin = "purple",
               
               #======  Help  ======#
               titlePanel("Help"),
-              tags$li(tags$ul("Prediction vs. Inference: Prediction main goal is to estimate a function, 
-                            while inference is interested in how covariates impact the outcome. Prediction is not
-                              looking to understand causal relationships as the primary goal.")),
-              tags$li(tags$ul("In order to answer our prediction problem, we fit several models on the training data and 
-                            selected the model which minimized the loss on our test data. This resulted in the optimal function
-                            selecting the covariates to predict future VTE events. Here we are assuming
-                            that our selected model will perform well and be generalizable to unseen data.")),
+              tags$li(tags$ul("Inference using LASSO has been proposed in this", tags$a(href = "https://www.jstor.org/stable/23239544?seq=12#metadata_info_tab_contents", "paper"), "by Minnier, Tian, and Cai.")),
+              tags$li(tags$ul("In order to answer our prediction problem, LASSO was used in order to propose a model and appropriately shrink.")),
               tags$li(tags$ul(tags$a(href= "https://www.stat.berkeley.edu/~aldous/157/Papers/shmueli.pdf",
                                      "https://www.stat.berkeley.edu/~aldous/157/Papers/shmueli.pdf"))),
               tags$li(tags$ul(tags$a(href="https://www.datascienceblog.net/post/commentary/inference-vs-prediction/",
                                      "https://www.datascienceblog.net/post/commentary/inference-vs-prediction/"))),
-              p("Resources for help. Potentially add a link regarding prediction vs. inference.")
+              p("Resources for help.")
               
       ),
       
