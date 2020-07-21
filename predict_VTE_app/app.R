@@ -35,6 +35,9 @@ library(shinydashboard)
 library(shinydashboardPlus)
 library(tidyverse)
 library(plotly)
+library(riskRegression)  
+library(survival)
+require(survminer)
 
 
 
@@ -45,12 +48,17 @@ library(plotly)
 
 dir <- "/Volumes/fsmresfiles/PrevMed/Projects/Brain_SPORE_BB_Core/Projects/Horbinski/Thrombosis/Code/VTEpredictionGlioma/"
 
-readfile <- file.path(dir,"predict_VTE_app/analysisData_RShiny_2020-07-15.csv")  # data from training population that selected predictors
+readfile <- file.path(dir,"predict_VTE_app/analysisData_RShiny_2020-07-20.csv")  # data from training population that selected predictors
 rawdat <- read_csv(readfile) 
 
-readcoef <- file.path(dir, "predict_VTE_app/LASSOcoef_2020-07-15.csv")  # coefficients from training data
+readcoef <- file.path(dir, "predict_VTE_app/LASSOcoef_2020-07-20.csv")  # coefficients from training data
 coefdat <- read_csv(readcoef)
-  
+
+load(file = file.path(dir, "predict_VTE_app/m1_LassoCV.rda"))   #lassocv object
+lambda_min <- lassocv$lambda.min
+
+
+
 
 #=========     clean data     ========#
 clindat <- rawdat %>% 
@@ -66,6 +74,73 @@ clindat <- rawdat %>%
 
 catvars <- c("Sex", "Hypertension", "Hypothyroidism", "IDH", "MGMT", "TMZ", "Current_Smoker")
 contvars <- c("Age", "BMI", "WBCcount")
+
+
+
+#===============      get predictions        ==========#
+
+predictdat <- clindat %>%
+  dplyr::select(Age, Sex, BMI,  WBCcount, Hypothyroidism, Hypertension, IDH, MGMT, TMZ, WHOgrade, Current_Smoker, VTE_days, iVTE) %>%
+  dplyr::mutate(Sex= factor(Sex, levels = c("Male","Female")),
+                WHOgrade = factor(WHOgrade)) %>%
+  dplyr::mutate(VTE_months = as.numeric(VTE_days / 365.25 * 12)) %>%
+  dplyr::select(-VTE_days)
+
+
+
+#=== absolute risk prediction with riskRegression
+#cscfi <- CSC(formula = Surv(VTE_months, iVTE) ~ Age + Sex + BMI + WBCcount + Hypothyroidism + Hypertension + IDH + MGMT + TMZ + WHOgrade + Current_Smoker, data = predictdat)
+#fit1 <- coxph(Surv(VTE_months, iVTE) ~ Age + Sex + BMI + WBCcount + Hypothyroidism + Hypertension + IDH + MGMT + TMZ +  WHOgrade + Current_Smoker, data = predictdat)
+#h <- with(predictdat, prodlim::Hist(VTE_months, iVTE))
+
+
+#pfit <- predict(fit1, newdata = predictdat, type = "risk", se = TRUE)
+#pfit2 <- predict(fit1, newdata = predictdat, type = "expected", se = TRUE)
+#pfit3 <- predict.coxph(fit1, newdata = predictdat, type = "risk", se = TRUE)
+
+
+#Table. PFS probabilities at 6 and 12 months
+#PFSprob <- summary(kmPFS, times = c(6, 12))
+
+
+
+#VTEhat <- as.matrix(predict(lassocv, s=lambda_min, type = "coefficient"))
+#VTEhattest2 <- predict(lassocv, s=lambda_min,new = x_train, type = "link")
+#VTEhattest  <- (predict(lassocv, new = matrixdat, s=lambda_min))
+
+
+
+#model_string <- as.formula(paste(" ~", paste(names(predictdat)[!predictdat %in% c("VTE_months", "iVTE")], collapse = "+"))) 
+#matrixdat <- model.matrix(model_string, predictdat)
+#cv_coef <- as.matrix(predict(lassocv, s=lambda_min, type = "coefficient"))
+
+#==== create test and train data ======#
+# library(caret)
+# set.seed(3456)
+# trainIndex <- createDataPartition(predictdat$iVTE, p = .7,
+#                                   list = FALSE,
+#                                   times = 1)
+# TrainDat <- predictdat[ trainIndex,]
+# TestDat <- predictdat[-trainIndex,]
+# 
+# 
+# testcox <- coxph(Surv(VTE_months, iVTE) ~ 1, dat = TrainDat)
+# bhest <- basehaz(testcox)  #estimate baseline hazard
+# 
+# VTEprob <- summary(testcox, times = c(1,3,6,12))
+
+
+
+
+
+
+#=========    pull needed coefficients    ========#
+coef_interest <- coefdat %>% dplyr::select(Variable, meanBetas) %>%
+  dplyr::mutate(Variable = recode(Variable, !!!c("SexFemale" = "Sex", "HypertensionYes" = "Hypertension",
+                                                 "HypothyroidismYes" = "Hypothyroidism", "IDHYes" = "IDH", "MGMTYes" = "MGMT",
+                                                 "TMZYes" = "TMZ", "WHOgrade4" = "WHOgrade")))
+
+
 
 
 #======    PCA    =======#
@@ -150,7 +225,7 @@ ui <- dashboardPagePlus(skin = "purple",
               
               tags$li(tags$ul("Prediction probabilities will be determined using the coefficient estimates from the predictors selected using 
                               the methods described above.  For more information regarding the data used to generate these coefficients and 
-                              predictors, please view the `Visualize` tab.")),
+                              predictors, please view the 'Visualize' tab.")),
               
               
               br(),
@@ -158,20 +233,18 @@ ui <- dashboardPagePlus(skin = "purple",
               
               #======  Help  ======#
               titlePanel("Help"),
+              p("Resources for help."),
               tags$li(tags$ul("Inference using LASSO has been proposed in this", tags$a(href = "https://www.jstor.org/stable/23239544?seq=12#metadata_info_tab_contents", "paper"), "by Minnier, Tian, and Cai.")),
               tags$li(tags$ul("In order to answer our prediction problem, LASSO was used in order to propose a model and appropriately shrink.")),
-              tags$li(tags$ul(tags$a(href= "https://www.stat.berkeley.edu/~aldous/157/Papers/shmueli.pdf",
-                                     "https://www.stat.berkeley.edu/~aldous/157/Papers/shmueli.pdf"))),
-              tags$li(tags$ul(tags$a(href="https://www.datascienceblog.net/post/commentary/inference-vs-prediction/",
-                                     "https://www.datascienceblog.net/post/commentary/inference-vs-prediction/"))),
-              p("Resources for help.")
+              tags$li(tags$ul("Similar paper 'Feature selection and survival modeling in The Cancer Genome Atlas' in GBMs", tags$a(href =  "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3790279/", "here")))
+             
               
       ),
       
       # Prediction tab content
       tabItem(tabName = "prediction",
               
-              # Application title
+              # Application titleisn
               titlePanel("VTE Prediction for Glioma Patients"),
               p("Patient and tumor characteristics at diagnosis of original glioma"),
               br(),
@@ -179,7 +252,7 @@ ui <- dashboardPagePlus(skin = "purple",
               
               fluidRow(
                 box(title = "Clinical Characteristics", status= "primary", solidHeader = TRUE,
-                    collapsible = TRUE, height = 700,
+                    collapsible = FALSE, height = 650,
                     
                     "At diagnosis of original glioma",  br(), br(),  "",
                     
@@ -193,21 +266,21 @@ ui <- dashboardPagePlus(skin = "purple",
                     
                     sliderInput('BMI', 'BMI', 0,50,1),
                     
-                    numericInput(inputId = "Platelet_count", label = "Platelet count (10^9/L)", value = NULL),
+                    #numericInput(inputId = "Platelet_count", label = "Platelet count (10^9/L)", value = NULL),
                     numericInput(inputId = "WBCcount", label = "White blood cell count (10^9/L)", value = NULL),
                     radioButtons(inputId = "TMZ", label = "Treated with TMZ", c("Yes", "No"), selected = character(0))
                     
                 ),
                 
                 box(title = "Molecular Markers", status = "primary", solidHeader = TRUE,
-                    collapsible = TRUE, height = 350,
+                    collapsible = FALSE, height = 350,
                     radioButtons(inputId = "IDH", label = "IDH Mutation", c("Yes", "No"), selected = character(0)),
                     radioButtons(inputId = "MGMT", label = "MGMT methylation", c("Yes", "No"), selected = character(0)),
                     radioButtons(inputId = "WHOgrade", label = "WHO grade of original glioma", c(2,3,4), selected = character(0))
                     ),
                 
                 box(title = "History of the following?", status = "primary", solidHeader = TRUE,
-                    collapsible = TRUE, height = 330,
+                    collapsible = FALSE, height = 280,
                     
                     "At diagnosis of original glioma", br(), "",
                     
@@ -224,9 +297,18 @@ ui <- dashboardPagePlus(skin = "purple",
               br(),
               
               
-              titlePanel("Prediction Probabilities"),
-              tags$li(tags$ul("1, 3, 6, 12 months")),
-              tags$li(tags$ul("Predicted probabilities from Cox regression."))
+              titlePanel("Prediction Probabilities of VTE"),
+              p("Explanation of prediction methods here. We compute the hazard ratio relative to the sample average for selected predictor variables."),
+
+              fluidRow(
+                box(title = "Results", 
+                    width = 11,
+                    solidHeader = TRUE, status = "primary",
+                    "Predicted probabilities using the active covariates selected from the optimal model from regularized Cox regression.", br(), "",
+                    "Need to add 1,3,6,12 month probabilities", br(), "",
+                    tableOutput(outputId = "Prediction_table"))
+              )
+              
            
       ),
       
@@ -238,7 +320,7 @@ ui <- dashboardPagePlus(skin = "purple",
               fluidRow(
                 box(title = "Controls",
                     width = 4,
-                    collapsible = TRUE, status = "warning", solidHeader = TRUE,
+                    collapsible = TRUE, status = "primary", solidHeader = TRUE,
                     "Select the variable you would like to see plotted in the bar graph to the right.",   br(), br(),  "",
 
                     selectInput(inputId = "contvarplot", label = "Comparison Variable ",
@@ -254,32 +336,20 @@ ui <- dashboardPagePlus(skin = "purple",
               ),
               
               
-              
-              fluidRow(
-                box(title = "Controls",
-                    width = 4,
-                    collapsible = TRUE, status = "warning", solidHeader = TRUE,
-                    "Select the variable you would like to see plotted in the bar graph to the right.",   br(), br(),  "",
-
-                    selectInput(inputId = "contvarplot2", label = "Comparison Variable",
-                                choices = c(Choose = '',contvars),
-                                multiple = FALSE)),
-                
-                box(title = "Explore Training Cohort", 
-                    width=7,
-                    collapsible = TRUE, status = "warning", solidHeader = TRUE,
-                    plotlyOutput("plotbar", height = 300))
-              ),
-              
-              
-              
               fluidRow(
                 box(title = "PCA", 
                     width = 11,
                     collapsible = TRUE, solidHeader = TRUE, status = "success",
                     "PCA low-dimensional representation that explain variance",
                     plotlyOutput("plot3D"))
-              )
+              ),
+              
+              fluidRow(
+                box(title = "Kaplan-Meier Plot", 
+                    width = 11, 
+                    collapsible = TRUE, status = "warning", solidHeader = TRUE,
+                    plotOutput("plotKM", height = 400))
+              ),
 
               
       
@@ -296,7 +366,7 @@ ui <- dashboardPagePlus(skin = "purple",
   
   
   ## Footnote content
- dashboardFooter(left_text = "VTE Prediction" ,right_text = tags$img(src='FeinbergLogo.png',height='35',width='150'))
+ dashboardFooter(left_text = "VTEpredictionGlioma" ,right_text = tags$img(src='FeinbergLogo.png',height='35',width='150'))
 )
 
 
@@ -311,7 +381,60 @@ ui <- dashboardPagePlus(skin = "purple",
 server <- function(input, output) {
 
   
+  #=============      Predicted table        ============#
+  output$Prediction_table <- renderTable({
+    
+    
+    validate(
+      need(input$Age != '' | input$Sex != '' | input$Current_Smoker != '' | input$BMI != '' | input$WBCcount != ''
+           | input$TMZ != '' | input$IDH != '' | input$MGMT != '' | input$WHOgrade != '' | input$Hypertension != '' | input$Hypothyroidism != '' 
+           , 'Please input all clinical and tumor characteristics.')
+    )
+    
+    entered_dat <- data.frame(input$Age, input$Sex, input$Current_Smoker, input$BMI,  input$WBCcount, 
+                              input$TMZ, input$IDH, input$MGMT, input$WHOgrade, input$Hypertension, input$Hypothyroidism) %>%
+      dplyr::rename("Age" = "input.Age", "Sex" = "input.Sex", "Current_Smoker" = "input.Current_Smoker", "BMI" = "input.BMI", 
+                    "WBCcount" = "input.WBCcount",  "TMZ" = "input.TMZ", "IDH" = "input.IDH", "MGMT" = "input.MGMT", 
+                    "WHOgrade" = "input.WHOgrade", "Hypertension" = "input.Hypertension", "Hypothyroidism" = "input.Hypothyroidism") %>%
+      dplyr::mutate(Sex= factor(Sex, levels = c("Male","Female")),
+                    WHOgrade = factor(WHOgrade))
+    
+    #dat_matrix <- as.matrix(entered_dat)
+
+    #head(coef_interest)
+    #head(entered_dat)
+    
+    # predicted_outcome <- (entered_dat$Age)*coef_interest$meanBetas[coef_interest$Variable == "Age"] +
+    #   (entered_dat$Sex)*coef_interest$meanBetas[coef_interest$Variable == "Sex"] +
+    #   (entered_dat$BMI)*coef_interest$meanBetas[coef_interest$Variable == "BMI"] +
+    #   (entered_dat$Platelet_count)*coef_interest$meanBetas[coef_interest$Variable == "Platelet_count"] +
+    #   (entered_dat$WBCcount)*coef_interest$meanBetas[coef_interest$Variable == "WBCcount"] +
+    #   (entered_dat$Hypertension)*coef_interest$meanBetas[coef_interest$Variable == "Hypertension"] +
+    #   (entered_dat$Hypothyroidism)*coef_interest$meanBetas[coef_interest$Variable == "Hypothyroidism"] +
+    #   (entered_dat$IDH)*coef_interest$meanBetas[coef_interest$Variable == "IDH"] +
+    #   (entered_dat$MGMT)*coef_interest$meanBetas[coef_interest$Variable == "MGMT"] +
+    #   (entered_dat$TMZ)*coef_interest$meanBetas[coef_interest$Variable == "TMZ"] +
+    #   (entered_dat$WHOgrade)*coef_interest$meanBetas[coef_interest$Variable == "WHOgrade"] 
+    # 
+    
+    fit1 <- coxph(Surv(VTE_months, iVTE) ~ Age + Sex + BMI + WBCcount + Hypothyroidism + Hypertension + IDH + MGMT + TMZ + 
+                    WHOgrade + Current_Smoker, data = predictdat)
+    
+    pfit <- predict(fit1, newdata = entered_dat, type = "risk", se = TRUE) #relative risk
+    
+    tableout <- tibble("Relative Risk"= pfit[["fit"]], "SE" = pfit[["se.fit"]]) %>%
+      dplyr::mutate("Confidence Interval" = paste0("(", round(`Relative Risk` - 1.96*SE,2), ", ", round(`Relative Risk` + 1.96*SE,2), ")"))
+    
+    tableout  #relative risk and CI
+    
+    #predicted_outcome
+  })
   
+  
+  
+  
+  
+  #=============      Plot by WHO Grade        ============#
   output$plotbar_byGrade <- renderPlotly({
     
     validate(
@@ -326,23 +449,8 @@ server <- function(input, output) {
       geom_bar(stat = "identity",  position=position_dodge()) + 
       facet_wrap( ~ WHOgrade_char) + ylab(unique(datanew$Attribute))
   })
-  
-  
-  output$plotbar <- renderPlotly({
-    
-    validate(
-      need(input$contvarplot2 != '', 'Please choose a comparison variable.')
-    )
-    
-    datanew2 <- clindat %>%
-      dplyr::select(one_of(c("VTE",  "IDH", input$contvarplot2))) %>%
-      gather(Attribute, value, -VTE, -IDH)
-    
-    ggplot(data = datanew2, aes(x = IDH, y = value, fill=VTE)) +
-      geom_bar(stat = "identity",  position=position_dodge()) + ylab(unique(datanew2$Attribute))
-  })
-  
-  
+
+  #=============      PCA plot 3D        ============#
   output$plot3D <- renderPlotly({
     plot_ly(pcpoints, x=~PC1, y=~PC2, z=~PC3,
             color = ~clindat.VTE) %>%
@@ -353,6 +461,18 @@ server <- function(input, output) {
     
     #layout(legend=list(title=list(text='<b> VTE </b>')))
   })
+  
+  
+  
+  #=============      KM Plot       ============#
+  output$plotKM <- renderPlot({
+    
+    kmVTE <- survfit(Surv(VTE_months, iVTE) ~ 1, data=predictdat, type="kaplan-meier")
+    
+    ggsurvplot(kmVTE, data = predictdat,  conf.int = TRUE, pval = FALSE, risk.table = "nrisk_cumevents",
+               xlab = "VTE-free Survival (Months)", surv.median.line = "hv", legend.title = "") 
+  })
+  
   
 
   
