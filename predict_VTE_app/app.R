@@ -37,7 +37,8 @@ library(tidyverse)
 library(plotly)
 library(riskRegression)  
 library(survival)
-require(survminer)
+library(survminer)
+library(pec)   #for predictSurvProb()
 
 
 
@@ -51,8 +52,8 @@ dir <- "/Volumes/fsmresfiles/PrevMed/Projects/Brain_SPORE_BB_Core/Projects/Horbi
 readfile <- file.path(dir,"predict_VTE_app/analysisData_RShiny_2020-07-20.csv")  # data from training population that selected predictors
 rawdat <- read_csv(readfile) 
 
-readcoef <- file.path(dir, "predict_VTE_app/LASSOcoef_2020-07-20.csv")  # coefficients from training data
-coefdat <- read_csv(readcoef)
+#readcoef <- file.path(dir, "predict_VTE_app/LASSOcoef_2020-07-20.csv")  # coefficients from training data
+#coefdat <- read_csv(readcoef)
 
 load(file = file.path(dir, "predict_VTE_app/m1_LassoCV.rda"))   #lassocv object
 lambda_min <- lassocv$lambda.min
@@ -85,61 +86,6 @@ predictdat <- clindat %>%
                 WHOgrade = factor(WHOgrade)) %>%
   dplyr::mutate(VTE_months = as.numeric(VTE_days / 365.25 * 12)) %>%
   dplyr::select(-VTE_days)
-
-
-
-#=== absolute risk prediction with riskRegression
-#cscfi <- CSC(formula = Surv(VTE_months, iVTE) ~ Age + Sex + BMI + WBCcount + Hypothyroidism + Hypertension + IDH + MGMT + TMZ + WHOgrade + Current_Smoker, data = predictdat)
-#fit1 <- coxph(Surv(VTE_months, iVTE) ~ Age + Sex + BMI + WBCcount + Hypothyroidism + Hypertension + IDH + MGMT + TMZ +  WHOgrade + Current_Smoker, data = predictdat)
-#h <- with(predictdat, prodlim::Hist(VTE_months, iVTE))
-
-
-#pfit <- predict(fit1, newdata = predictdat, type = "risk", se = TRUE)
-#pfit2 <- predict(fit1, newdata = predictdat, type = "expected", se = TRUE)
-#pfit3 <- predict.coxph(fit1, newdata = predictdat, type = "risk", se = TRUE)
-
-
-#Table. PFS probabilities at 6 and 12 months
-#PFSprob <- summary(kmPFS, times = c(6, 12))
-
-
-
-#VTEhat <- as.matrix(predict(lassocv, s=lambda_min, type = "coefficient"))
-#VTEhattest2 <- predict(lassocv, s=lambda_min,new = x_train, type = "link")
-#VTEhattest  <- (predict(lassocv, new = matrixdat, s=lambda_min))
-
-
-
-#model_string <- as.formula(paste(" ~", paste(names(predictdat)[!predictdat %in% c("VTE_months", "iVTE")], collapse = "+"))) 
-#matrixdat <- model.matrix(model_string, predictdat)
-#cv_coef <- as.matrix(predict(lassocv, s=lambda_min, type = "coefficient"))
-
-#==== create test and train data ======#
-# library(caret)
-# set.seed(3456)
-# trainIndex <- createDataPartition(predictdat$iVTE, p = .7,
-#                                   list = FALSE,
-#                                   times = 1)
-# TrainDat <- predictdat[ trainIndex,]
-# TestDat <- predictdat[-trainIndex,]
-# 
-# 
-# testcox <- coxph(Surv(VTE_months, iVTE) ~ 1, dat = TrainDat)
-# bhest <- basehaz(testcox)  #estimate baseline hazard
-# 
-# VTEprob <- summary(testcox, times = c(1,3,6,12))
-
-
-
-
-
-
-#=========    pull needed coefficients    ========#
-coef_interest <- coefdat %>% dplyr::select(Variable, meanBetas) %>%
-  dplyr::mutate(Variable = recode(Variable, !!!c("SexFemale" = "Sex", "HypertensionYes" = "Hypertension",
-                                                 "HypothyroidismYes" = "Hypothyroidism", "IDHYes" = "IDH", "MGMTYes" = "MGMT",
-                                                 "TMZYes" = "TMZ", "WHOgrade4" = "WHOgrade")))
-
 
 
 
@@ -298,14 +244,13 @@ ui <- dashboardPagePlus(skin = "purple",
               
               
               titlePanel("Prediction Probabilities of VTE"),
-              p("Explanation of prediction methods here. We compute the hazard ratio relative to the sample average for selected predictor variables."),
+              p("Predict the VTE survival probabilities for the patient entered above at 1,3,6, and 12 months.."),
 
               fluidRow(
                 box(title = "Results", 
                     width = 11,
                     solidHeader = TRUE, status = "primary",
                     "Predicted probabilities using the active covariates selected from the optimal model from regularized Cox regression.", br(), "",
-                    "Need to add 1,3,6,12 month probabilities", br(), "",
                     tableOutput(outputId = "Prediction_table"))
               )
               
@@ -357,7 +302,9 @@ ui <- dashboardPagePlus(skin = "purple",
       
       # references tab content
       tabItem(tabName = "references",
-              h2("List references HERE")
+              h2("List references HERE"), br(),
+              tags$li(tags$ul("Resource for predictSurvProb for prediction with Cox model found", tags$a(href =  "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4194196/", "here")))
+              
     
       )
     )
@@ -403,31 +350,35 @@ server <- function(input, output) {
 
     #head(coef_interest)
     #head(entered_dat)
+
     
-    # predicted_outcome <- (entered_dat$Age)*coef_interest$meanBetas[coef_interest$Variable == "Age"] +
-    #   (entered_dat$Sex)*coef_interest$meanBetas[coef_interest$Variable == "Sex"] +
-    #   (entered_dat$BMI)*coef_interest$meanBetas[coef_interest$Variable == "BMI"] +
-    #   (entered_dat$Platelet_count)*coef_interest$meanBetas[coef_interest$Variable == "Platelet_count"] +
-    #   (entered_dat$WBCcount)*coef_interest$meanBetas[coef_interest$Variable == "WBCcount"] +
-    #   (entered_dat$Hypertension)*coef_interest$meanBetas[coef_interest$Variable == "Hypertension"] +
-    #   (entered_dat$Hypothyroidism)*coef_interest$meanBetas[coef_interest$Variable == "Hypothyroidism"] +
-    #   (entered_dat$IDH)*coef_interest$meanBetas[coef_interest$Variable == "IDH"] +
-    #   (entered_dat$MGMT)*coef_interest$meanBetas[coef_interest$Variable == "MGMT"] +
-    #   (entered_dat$TMZ)*coef_interest$meanBetas[coef_interest$Variable == "TMZ"] +
-    #   (entered_dat$WHOgrade)*coef_interest$meanBetas[coef_interest$Variable == "WHOgrade"] 
-    # 
-    
+    ##==== use predictSurvProb (pec package)   ===#
     fit1 <- coxph(Surv(VTE_months, iVTE) ~ Age + Sex + BMI + WBCcount + Hypothyroidism + Hypertension + IDH + MGMT + TMZ + 
-                    WHOgrade + Current_Smoker, data = predictdat)
+                    WHOgrade + Current_Smoker, data = predictdat, x=TRUE, y=TRUE)
     
-    pfit <- predict(fit1, newdata = entered_dat, type = "risk", se = TRUE) #relative risk
     
-    tableout <- tibble("Relative Risk"= pfit[["fit"]], "SE" = pfit[["se.fit"]]) %>%
-      dplyr::mutate("Confidence Interval" = paste0("(", round(`Relative Risk` - 1.96*SE,2), ", ", round(`Relative Risk` + 1.96*SE,2), ")"))
+    ## Wwant to predict the survival probabilities for the new patient (entered in the app, like a validation data)
+    ## at the following time points: 1,3,6,12 months
     
-    tableout  #relative risk and CI
+    ## This is a matrix with survival probabilities
+    ## one column for each of the 5 time points
+    ## one row for each validation set individual
+    psurv <- predictSurvProb(fit1, newdata = entered_dat, times = c(1,3,6,12))
     
-    #predicted_outcome
+    psurv2 <- data.frame(psurv)
+    names(psurv2) <- c("1 Month", "3 Months", "6 Months", "12 Months")
+    
+    
+    psurv2
+    
+
+    #pfit <- predict(fit1, newdata = entered_dat, type = "risk", se = TRUE) #relative risk
+    
+    # tableout <- tibble("Relative Risk"= pfit[["fit"]], "SE" = pfit[["se.fit"]]) %>%
+    #   dplyr::mutate("Confidence Interval" = paste0("(", round(`Relative Risk` - 1.96*SE,2), ", ", round(`Relative Risk` + 1.96*SE,2), ")"))
+    # 
+    # tableout  #relative risk and CI
+
   })
   
   
