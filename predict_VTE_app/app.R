@@ -19,34 +19,42 @@
 
 #==========================================================#
 
-# https://shiny.rstudio.com/gallery/
-# https://shiny.rstudio.com/gallery/radiant.html
-
-
-# deployApp("/Volumes/fsmresfiles/PrevMed/Projects/Brain_SPORE_BB_Core/Projects/CETO/RNAseq_DESeq2/Code/CETO_RNAseq_DESeq2_app",
-#                      appName = "RNAseqCETO",
-#                      appTitle = "RNA-seq in CETO",
-#                      launch.browser = FALSE,
-#                      forceUpdate = TRUE)
 
 
 #Installing/Loading Packages
 
-# if(!require(shiny)){
-#   install.packages("shiny")
-#   library(shiny)
+
+#library(foreign)
+# options("repos" = c("CRAN" = "https://cran.rstudio.com", 
+#                     "svn.r-project" = "https://svn.r-project.org/R-packages/trunk/foreign"))
+
+if(!require(shiny)){
+  install.packages("shiny")
+  library(shiny)
+}
+
+if(!require(shinydashboard)){
+  install.packages("shinydashboard")
+  library(shinydashboard)
+}
+
+if(!require(shinydashboardPlus)){
+  install.packages("shinydashboardPlus")
+  library(shinydashboardPlus)
+}
+
+# if(!require(tidyverse)){
+#   install.packages("tidyverse")
+#   library(tidyverse)
 # }
 
-library(shiny)
-library(shinydashboard)
-library(shinydashboardPlus)
-library(tidyverse)
-library(plotly)
-library(riskRegression)  
-library(survival)
-library(survminer)
-library(pec)   #for predictSurvProb()
+if(!require(plotly)){
+  install.packages("plotly")
+  library(plotly)
+}
 
+#library(survival)
+#library(survminer)
 
 
  
@@ -58,8 +66,10 @@ dir <- "/Volumes/fsmresfiles/PrevMed/Projects/Brain_SPORE_BB_Core/Projects/Horbi
 
 #load in the objects
 load(file.path(dir, "predict_VTE_app/VTE_KMplot.rda")) #KM plot "ggsurv1" and "kmplotdat"
-load(file.path(dir, "predict_VTE_app/pcaVTE_VTE.rda")) #pca VTE column "pcaVTE"
-load(file.path(dir, "predict_VTE_app/VTE_pcaplot.rda")) #pca plot "pcaplot"
+#load(file.path(dir, "predict_VTE_app/pcaVTE_VTE.rda")) #pca VTE column "pcaVTE"
+#load(file.path(dir, "predict_VTE_app/VTE_pcaplot.rda")) #pca plot "pcaplot"
+load(file.path(dir, "predict_VTE_app/PCApoints.rda"))  #pcpoints and pcout in PCAplotData
+
 load(file.path(dir, "predict_VTE_app/VTE_predfit1.rda")) #prediction from original data selected model "predfit1"
 
 load(file.path(dir, "predict_VTE_app/VTE_allWHOplots.rda")) #bar charts by WHO grade "allWHOplots"
@@ -290,9 +300,11 @@ server <- function(input, output) {
     
     validate(
       need(input$Age != '' | input$Sex != '' |  input$BMI != '' | input$WBCcount != '' | input$Platelet_count != '' 
-           | input$Temozolomide != '' | input$IDH != '' | input$MGMT != '' | input$WHOgrade != '' | input$Hypertension != '' | input$Hypothyroidism != '' 
+           | input$Temozolomide != '' | input$IDH != '' | input$MGMT != '' | input$WHOgrade != '' | input$Hypertension != '' | 
+             input$Hypothyroidism != '' 
            , 'Please input all clinical and tumor characteristics below.')
     )
+    
     
     entered_dat <- data.frame(input$Age, input$Sex, input$BMI,  input$WBCcount, input$Platelet_count,
                               input$Temozolomide, input$IDH, input$MGMT, input$WHOgrade, input$Hypertension, input$Hypothyroidism) %>%
@@ -306,7 +318,7 @@ server <- function(input, output) {
     ##==== use predictSurvProb (pec package)   ===#
     fit1 <- predfit1  #this is the coxph model output
     
-    psurv <- 1-predictSurvProb(fit1, newdata = entered_dat, times = c(1,3,6,12))  # Probability of event (cumulative incidence 1-surv) instead of survival
+    psurv <- 1- pec::predictSurvProb(fit1, newdata = entered_dat, times = c(1,3,6,12))  # Probability of event (cumulative incidence 1-surv) instead of survival
     
     psurv2 <- data.frame(psurv)
     names(psurv2) <- c("1 Month", "3 Months", "6 Months", "12 Months")
@@ -343,7 +355,16 @@ server <- function(input, output) {
 
   #=============      PCA plot 3D        ============#
   output$plot3D <- renderPlotly({
-    pcaplot
+    pcpoints <- PCAplotData$pcpoints
+    pcout <- PCAplotData$pcout
+    
+    plotly::plot_ly(pcpoints, x=~PC1, y=~PC2, z=~PC3,
+            color = ~pcadatRAW.VTE) %>%
+      add_markers() %>%
+      layout(scene = list(xaxis = list(title = paste0("PC1 (", round(pcout["Proportion of Variance", "PC1"] *100,1) , "%)")),
+                          yaxis = list(title = paste0("PC2 (", round(pcout["Proportion of Variance", "PC2"] *100,1) , "%)")),
+                          zaxis = list(title = paste0("PC3 (", round(pcout["Proportion of Variance", "PC3"] *100,1) , "%)"))))
+    
   })
   
   
