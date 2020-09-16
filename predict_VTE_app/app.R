@@ -49,75 +49,26 @@ library(pec)   #for predictSurvProb()
 
 
 
-
+ 
 #==========================================================#
 #===============        Read in data             ==========#
 #==========================================================#
 
 dir <- "/Volumes/fsmresfiles/PrevMed/Projects/Brain_SPORE_BB_Core/Projects/Horbinski/Thrombosis/Code/VTEpredictionGlioma/"
 
-readfile <- file.path(dir,"predict_VTE_app/analysisData_RShiny_2020-09-11.csv")  # data from training population that selected predictors
-rawdat <- read_csv(readfile) 
-
-#readcoef <- file.path(dir, "predict_VTE_app/LASSOcoef_2020-07-20.csv")  # coefficients from training data
-#coefdat <- read_csv(readcoef)
-
-# load(file = file.path(dir, "predict_VTE_app/m1_LassoCV.rda"))   #lassocv object
-# lambda_min <- lassocv$lambda.min
-
-
-
 #load in the objects
-load(file.path(dir, "predict_VTE_app/VTE_survKM.rda")) #KM survfit "allsurvfitFU"
-load(file.path(dir, "predict_VTE_app/VTE_KMplot.rda")) #KM plot "ggsurv1"
+load(file.path(dir, "predict_VTE_app/VTE_KMplot.rda")) #KM plot "ggsurv1" and "kmplotdat"
 load(file.path(dir, "predict_VTE_app/pcaVTE_VTE.rda")) #pca VTE column "pcaVTE"
 load(file.path(dir, "predict_VTE_app/VTE_pcaplot.rda")) #pca plot "pcaplot"
+load(file.path(dir, "predict_VTE_app/VTE_predfit1.rda")) #prediction from original data selected model "predfit1"
+
+load(file.path(dir, "predict_VTE_app/VTE_allWHOplots.rda")) #bar charts by WHO grade "allWHOplots"
+#plots are ageWHOgrade, BMIWHOgrade, WBC_WHOgrade, platelet_WHOgrade
 
 
-
-
-
-#=========     clean data     ========#
-clindat <- rawdat %>% 
-  dplyr::mutate(VTE = dplyr::recode(iVTE, !!!c("1" = "Yes VTE", "0"= "No VTE")),
-                Sex_num = dplyr::recode(Sex , !!!c("Male" = 1,  "Female" = 0)),
-                Hypertension_num = dplyr::recode(Hypertension, !!!c("Yes" = 1,  "No" = 0)),
-                Hypothyroidism_num = dplyr::recode(Hypothyroidism, !!!c("Yes" = 1,  "No" = 0)),
-                IDH_num = dplyr::recode(IDH, !!!c("Yes" = 1,  "No" = 0)),
-                MGMT_num = dplyr::recode(MGMT, !!!c("Yes" = 1, "No" = 0)),
-                Temozolomide_num = dplyr::recode(Temozolomide, !!!c("Yes" = 1,  "No" = 0)),
-                WHOgrade = as.numeric(dplyr::recode(WHOgrade, !!!c("II" = "2" , "III" = "3", "IV" = "4"))),
-                WHOgrade_char = dplyr::recode(WHOgrade, !!!c("2" = "Grade 2", "3" = "Grade 3", "4" = "Grade 4")))
 
 catvars <- c("Sex", "Hypertension", "Hypothyroidism", "IDH", "MGMT", "Temozolomide")
 contvars <- c("Age", "BMI", "WBCcount", "Platelet_count")
-
-
-
-#===============      get predictions        ==========#
-
-predictdat <- clindat %>%
-  dplyr::select(Age, Sex, BMI,  WBCcount, Platelet_count, Hypothyroidism, Hypertension, IDH, MGMT, Temozolomide, WHOgrade, VTE_months, iVTE) %>%
-  dplyr::mutate(Sex= factor(Sex, levels = c("Male","Female")),
-                WHOgrade = factor(WHOgrade)) 
-  # dplyr::mutate(VTE_months = as.numeric(VTE_days / 365.25 * 12)) %>%
-  # dplyr::select(-VTE_days)
-
-
-
-# #======    PCA    =======#
-# library(missMDA)
-# predictorvars <- c("Age", "BMI", "Sex_num", "WBCcount", "Platelet_count", "Hypertension_num", "Hypothyroidism_num", "IDH_num",
-#                    "MGMT_num", "Temozolomide_num", "WHOgrade")
-# 
-# imputePCAout <- imputePCA(as.data.frame(clindat[,predictorvars]), method = "EM", ncp=2)
-# 
-# pca <- prcomp(imputePCAout$completeObs, center = TRUE, scale. = TRUE)
-# pcpoints <- data.frame(clindat$VTE, pca$x)
-# pcout <- summary(pca)$importance
-
-
-
 
 
 
@@ -144,11 +95,23 @@ ui <- dashboardPagePlus(skin = "purple",
       # Prediction tab content
       tabItem(tabName = "prediction",
               
-              # Application titleisn
               titlePanel("VTE Prediction for Glioma Patients"),
-              p("Patient and tumor characteristics at diagnosis of original glioma"),
+              p("Predicting probability of VTE event at 1, 3, 6, and 12 months for the patient entered below."),
+              
+              fluidRow(
+                box(title = "Results", 
+                    width = 11,
+                    solidHeader = TRUE, status = "warning",
+                    "Predicted probability of VTE event using the active covariates selected from the optimal model from regularized Cox regression.", br(), "",
+                    tableOutput(outputId = "Prediction_table"))
+              ),
+              
+              br(),
               br(),
               
+              
+              # Application titleisn
+              p("Patient and tumor characteristics at diagnosis of original glioma"),
               
               fluidRow(
                 box(title = "Patient Markers", status= "primary", solidHeader = TRUE,
@@ -172,7 +135,7 @@ ui <- dashboardPagePlus(skin = "purple",
                     collapsible = FALSE, height = 350,
                     radioButtons(inputId = "IDH", label = "IDH Mutation", c("Yes", "No"), selected = character(0)),
                     radioButtons(inputId = "MGMT", label = "MGMT promoter methylation", c("Yes", "No"), selected = character(0)),
-                    radioButtons(inputId = "WHOgrade", label = "WHO grade of original glioma", c(2,3,4), selected = character(0))
+                    radioButtons(inputId = "WHOgrade", label = "WHO grade of original glioma", c("II","III","IV"), selected = character(0))
                     ),
                 
                 box(title = "History of the following?", status = "primary", solidHeader = TRUE,
@@ -186,25 +149,9 @@ ui <- dashboardPagePlus(skin = "purple",
                     radioButtons(inputId = "Hypothyroidism", label = "Hypothyroidism", c("Yes", "No"), selected = character(0))
                     
                     )
-              ),
-              
-
-              br(),
-              br(),
-              
-              
-              titlePanel("Prediction Probabilities of VTE"),
-              p("Predict the VTE survival probabilities for the patient entered above at 1,3,6, and 12 months.."),
-
-              fluidRow(
-                box(title = "Results", 
-                    width = 11,
-                    solidHeader = TRUE, status = "primary",
-                    "Predicted probabilities using the active covariates selected from the optimal model from regularized Cox regression.", br(), "",
-                    tableOutput(outputId = "Prediction_table"))
               )
               
-           
+
       ),
       
           
@@ -344,7 +291,7 @@ server <- function(input, output) {
     validate(
       need(input$Age != '' | input$Sex != '' |  input$BMI != '' | input$WBCcount != '' | input$Platelet_count != '' 
            | input$Temozolomide != '' | input$IDH != '' | input$MGMT != '' | input$WHOgrade != '' | input$Hypertension != '' | input$Hypothyroidism != '' 
-           , 'Please input all clinical and tumor characteristics.')
+           , 'Please input all clinical and tumor characteristics below.')
     )
     
     entered_dat <- data.frame(input$Age, input$Sex, input$BMI,  input$WBCcount, input$Platelet_count,
@@ -355,39 +302,16 @@ server <- function(input, output) {
       dplyr::mutate(Sex= factor(Sex, levels = c("Male","Female")),
                     WHOgrade = factor(WHOgrade))
     
-    #dat_matrix <- as.matrix(entered_dat)
 
-    #head(coef_interest)
-    #head(entered_dat)
-
-    
     ##==== use predictSurvProb (pec package)   ===#
-    fit1 <- coxph(Surv(VTE_months, iVTE) ~ Age + Sex + BMI + WBCcount + Platelet_count + Hypothyroidism + Hypertension + IDH + MGMT + Temozolomide + 
-                    WHOgrade , data = predictdat, x=TRUE, y=TRUE)
+    fit1 <- predfit1  #this is the coxph model output
     
-    
-    ## Wwant to predict the survival probabilities for the new patient (entered in the app, like a validation data)
-    ## at the following time points: 1,3,6,12 months
-    
-    ## This is a matrix with survival probabilities
-    ## one column for each of the 5 time points
-    ## one row for each validation set individual
-    psurv <- predictSurvProb(fit1, newdata = entered_dat, times = c(1,3,6,12))
+    psurv <- 1-predictSurvProb(fit1, newdata = entered_dat, times = c(1,3,6,12))  # Probability of event (cumulative incidence 1-surv) instead of survival
     
     psurv2 <- data.frame(psurv)
     names(psurv2) <- c("1 Month", "3 Months", "6 Months", "12 Months")
     
-    
     psurv2
-    
-
-    #pfit <- predict(fit1, newdata = entered_dat, type = "risk", se = TRUE) #relative risk
-    
-    # tableout <- tibble("Relative Risk"= pfit[["fit"]], "SE" = pfit[["se.fit"]]) %>%
-    #   dplyr::mutate("Confidence Interval" = paste0("(", round(`Relative Risk` - 1.96*SE,2), ", ", round(`Relative Risk` + 1.96*SE,2), ")"))
-    # 
-    # tableout  #relative risk and CI
-
   })
   
   
@@ -401,35 +325,31 @@ server <- function(input, output) {
       need(input$contvarplot != '', 'Please choose a comparison variable.')
     )
     
-  datanew <- clindat %>%
-    dplyr::select(one_of(c("VTE",  "WHOgrade_char", "IDH", input$contvarplot))) %>%
-    gather(Attribute, value, -VTE, -WHOgrade_char, -IDH)
+  if(input$contvarplot == "Age"){
+    allWHOplots$ageWHOgrade
+  } else {
+    if (input$contvarplot == "BMI"){
+      allWHOplots$BMIWHOgrade
+    } else {
+      if (input$contvarplot == "WBCcount"){
+        allWHOplots$WBC_WHOgrade
+      } else {
+        allWHOplots$platelet_WHOgrade
+      }
+      
+  } }
     
-  ggplot(data = datanew, aes(x = IDH, y = value, fill=VTE)) +
-      geom_bar(stat = "identity",  position=position_dodge()) + 
-      facet_wrap( ~ WHOgrade_char) + ylab(unique(datanew$Attribute))
   })
 
   #=============      PCA plot 3D        ============#
   output$plot3D <- renderPlotly({
-    
-    
     pcaplot
-    # plot_ly(pcpoints, x=~PC1, y=~PC2, z=~PC3,
-    #         color = ~clindat.VTE) %>%
-    #   add_markers() %>%
-    #   layout(scene = list(xaxis = list(title = paste0("PC1 (", round(pcout["Proportion of Variance", "PC1"] *100,1) , "%)")),
-    #                       yaxis = list(title = paste0("PC2 (", round(pcout["Proportion of Variance", "PC2"] *100,1) , "%)")),
-    #                       zaxis = list(title = paste0("PC3 (", round(pcout["Proportion of Variance", "PC3"] *100,1) , "%)"))))
-    # 
-    #layout(legend=list(title=list(text='<b> VTE </b>')))
   })
-  
   
   
   #=============      KM Plot       ============#
   output$plotKM <- renderPlot({
-    ggsurv1
+    kmplotdat$ggsurv1
   })
   
   
