@@ -22,11 +22,13 @@
 
 
 #Installing/Loading Packages
+# library(shiny)
+# library(shinydashboard)
+# library(shinydashboardPlus)
+# library(plotly)
+# library(pec)
+# library(riskRegression)
 
-
-#library(foreign)
-# options("repos" = c("CRAN" = "https://cran.rstudio.com", 
-#                     "svn.r-project" = "https://svn.r-project.org/R-packages/trunk/foreign"))
 
 if(!require(shiny)){
   install.packages("shiny")
@@ -43,18 +45,21 @@ if(!require(shinydashboardPlus)){
   library(shinydashboardPlus)
 }
 
-# if(!require(tidyverse)){
-#   install.packages("tidyverse")
-#   library(tidyverse)
-# }
-
 if(!require(plotly)){
   install.packages("plotly")
   library(plotly)
 }
 
-#library(survival)
-#library(survminer)
+if(!require(pec)){
+  install.packages("pec")
+  library(pec)
+}
+
+if(!require(riskRegression)){
+  install.packages("riskRegression")
+  library(riskRegression)
+}
+
 
 
  
@@ -62,25 +67,16 @@ if(!require(plotly)){
 #===============        Read in data             ==========#
 #==========================================================#
 
-dir <- "/Volumes/fsmresfiles/PrevMed/Projects/Brain_SPORE_BB_Core/Projects/Horbinski/Thrombosis/Code/VTEpredictionGlioma/"
-
 #load in the objects
-load(file.path(dir, "predict_VTE_app/VTE_KMplot.rda")) #KM plot "ggsurv1" and "kmplotdat"
-#load(file.path(dir, "predict_VTE_app/pcaVTE_VTE.rda")) #pca VTE column "pcaVTE"
-#load(file.path(dir, "predict_VTE_app/VTE_pcaplot.rda")) #pca plot "pcaplot"
-load(file.path(dir, "predict_VTE_app/PCApoints.rda"))  #pcpoints and pcout in PCAplotData
-
-load(file.path(dir, "predict_VTE_app/VTE_predfit1.rda")) #prediction from original data selected model "predfit1"
-
-load(file.path(dir, "predict_VTE_app/VTE_allWHOplots.rda")) #bar charts by WHO grade "allWHOplots"
+load("VTE_KMplot.rda") #KM plot "ggsurv1" and "kmplotdat" and "allsurvfitFU"
+load("VTE_probVTEeventKM.rda") #KM curve cum incidence "probVTEeventKM"
+load("PCApoints.rda")  #pcpoints and pcout in PCAplotData
+load("VTE_predfit1.rda") #prediction from original data selected model "predfit1"
+load("VTE_allWHOplots.rda") #bar charts by WHO grade "allWHOplots"
 #plots are ageWHOgrade, BMIWHOgrade, WBC_WHOgrade, platelet_WHOgrade
-
-
 
 catvars <- c("Sex", "Hypertension", "Hypothyroidism", "IDH", "MGMT", "Temozolomide")
 contvars <- c("Age", "BMI", "WBCcount", "Platelet_count")
-
-
 
 
 
@@ -197,11 +193,11 @@ ui <- dashboardPagePlus(skin = "purple",
               ),
               
               fluidRow(
-                box(title = "Kaplan-Meier Plot", 
-                    width = 11, 
+                box(title = "Kaplan-Meier Curve", 
+                    width = 11,
                     collapsible = TRUE, status = "warning", solidHeader = TRUE,
-                    plotOutput("plotKM", height = 400))
-              ),
+                    plotOutput("plotKM"))
+              )
 
               
       
@@ -318,7 +314,7 @@ server <- function(input, output) {
     ##==== use predictSurvProb (pec package)   ===#
     fit1 <- predfit1  #this is the coxph model output
     
-    psurv <- 1- pec::predictSurvProb(fit1, newdata = entered_dat, times = c(1,3,6,12))  # Probability of event (cumulative incidence 1-surv) instead of survival
+    psurv <- 1- predictSurvProb(fit1, newdata = entered_dat, times = c(1,3,6,12))  # Probability of event (cumulative incidence 1-surv) instead of survival
     
     psurv2 <- data.frame(psurv)
     names(psurv2) <- c("1 Month", "3 Months", "6 Months", "12 Months")
@@ -370,8 +366,27 @@ server <- function(input, output) {
   
   #=============      KM Plot       ============#
   output$plotKM <- renderPlot({
-    kmplotdat$ggsurv1
+    plot(kmplotdat$allsurvfitFU, mark.time = T, fun = "event", ylim = c(0,1), xlim = c(0,200), col = "red",
+         ylab="Probability of VTE Event" , xlab = "Venous Thromboembolism Time (Months)")
+    
   })
+  
+  # output$myImage <- renderImage({
+  #   # A temp file to save the output.
+  #   # This file will be removed later by renderImage
+  #   outfile <- tempfile(fileext = '.png')
+  #   
+  #   # Generate the PNG
+  #   png(outfile, width = 400, height = 300)
+  #     kmplotdat$ggsurv1
+  #   dev.off()
+  #   
+  #   # Return a list containing the filename
+  #   list(src = outfile,
+  #        contentType = 'KMplot/png',
+  #        width = 400,
+  #        height = 300)
+  # })
   
   
 

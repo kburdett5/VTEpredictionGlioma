@@ -1,0 +1,10 @@
+name: GliomaPredictVTE
+title: VTE Prediction for Glioma Patients
+username:
+account: kbellburdett
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2821988
+bundleId: 3637570
+url: https://kbellburdett.shinyapps.io/GliomaPredictVTE/
+when: 1600305512.61589
