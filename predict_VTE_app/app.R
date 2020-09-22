@@ -102,13 +102,14 @@ ui <- dashboardPagePlus(skin = "purple",
       tabItem(tabName = "prediction",
               
               titlePanel("VTE Prediction for Glioma Patients"),
-              p("Predicting probability of VTE event at 1, 3, 6, and 12 months for the patient entered below."),
               
+              p("This current version is for research use only, and is not intended to be used in patient management.", style = "color:red"),
+
               fluidRow(
                 box(title = "Results", 
                     width = 11,
                     solidHeader = TRUE, status = "warning",
-                    "Predicted probability of VTE event using the active covariates selected from the optimal model from regularized Cox regression.", br(), "",
+                    "Predicting probability of VTE event at 1, 3, 6, and 12 months for the patient entered below..", br(), "",
                     tableOutput(outputId = "Prediction_table"))
               ),
               
@@ -205,29 +206,14 @@ ui <- dashboardPagePlus(skin = "purple",
       
       # references tab content
       tabItem(tabName = "references",
-              h2("List references HERE"), br(),
-              tags$li(tags$ul("Resource for predictSurvProb for prediction with Cox model found",
-                              tags$a(href =  "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4194196/", "here"))),
-              
-              
+
               #======  Objectives  ======#
               titlePanel("Objectives"),
               p("This interactive web application utilizes patient and tumor characteristics to predict venous thromboembolism (VTE)
                 in glioma patients after surgical resection of original glioma.") ,
               
-              tags$li(tags$ul("Risk prediction for VTE in glioma patients")),
-              tags$li(tags$ul("Risk prediction for VTE in glioma patients")),
-              
-              
               br(),
               
-              
-              #======  Getting Started  ======#
-              titlePanel("Getting Started"),
-              p("INSTRUCTIONS HERE for navigating app"),
-              
-              
-              br(),
               
               
               #======  Background  ======#
@@ -251,21 +237,25 @@ ui <- dashboardPagePlus(skin = "purple",
               
               tags$b(tags$u("Prediction")),
               
-              tags$li(tags$ul("Prediction probabilities will be determined using the coefficient estimates from the predictors selected using 
-                              the methods described above.  For more information regarding the data used to generate these coefficients and 
-                              predictors, please view the 'Visualize' tab.")),
-              
+              tags$li(tags$ul("Predicted probability of VTE event using the active covariates selected from the optimal model from regularized Cox regression. For more information regarding the data on which variable selection was performed, please view the 'Visualize' tab.")),
               
               br(),
               
               
-              #======  Help  ======#
-              titlePanel("Help"),
-              p("Resources for help."),
-              tags$li(tags$ul("Inference using LASSO has been proposed in this", tags$a(href = "https://www.jstor.org/stable/23239544?seq=12#metadata_info_tab_contents", "paper"), "by Minnier, Tian, and Cai.")),
-              tags$li(tags$ul("In order to answer our prediction problem, LASSO was used in order to propose a model and appropriately shrink.")),
-              tags$li(tags$ul("Similar paper 'Feature selection and survival modeling in The Cancer Genome Atlas' in GBMs", tags$a(href =  "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3790279/", "here")))
+              #======  References  ======#
+              titlePanel("References")
               
+              
+              # br(),
+              # 
+              # 
+              # #======  Help  ======#
+              # titlePanel("Help"),
+              # p("Resources for help."),
+              # tags$li(tags$ul("Inference using LASSO has been proposed in this", tags$a(href = "https://www.jstor.org/stable/23239544?seq=12#metadata_info_tab_contents", "paper"), "by Minnier, Tian, and Cai.")),
+              # tags$li(tags$ul("In order to answer our prediction problem, LASSO was used in order to propose a model and appropriately shrink.")),
+              # tags$li(tags$ul("Similar paper 'Feature selection and survival modeling in The Cancer Genome Atlas' in GBMs", tags$a(href =  "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3790279/", "here")))
+              # 
               
     
       )
